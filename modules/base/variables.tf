@@ -18,9 +18,28 @@ variable "availability_zone" {
   type = list(string)
 }
 
+variable "container_image_tag" {
+  description = "ECRイメージタグ"
+
+  type = string
+
+  default = "latest"
+}
+
 variable "db_name" {
-  description = "データベース名"
+  description = "DB名"
 
   type = string
 }
 
+variable "db_user" {
+  description = "DBユーザー名"
+
+  type = string
+}
+
+variable "db_password" {
+  description = "DBパスワード"
+
+  type = string
+}
