@@ -32,7 +32,6 @@ variable "db_password" {
 variable "db_host" {
   description = "DBホスト名"
   type        = string
-  default     = "" # 一時的にデフォルト値を設定
 }
 
 variable "vpc_id" {
@@ -55,13 +54,18 @@ variable "alb_security_group_id" {
   type        = string
 }
 
-variable "ecr_repository_url" {
-  description = "ECRリポジトリURL"
+variable "api_security_group_id" {
+  description = "APIセキュリティグループID"
   type        = string
 }
 
-# variable "log_group_name" {
-#   description = "CloudWatch LogsグループID"
-#   type        = string
-# }
+variable "cloudwatch_log_group_name" {
+  description = "CloudWatch LogsグループID"
+  type        = string
+}
+
+variable "ecr_repository_url" {
+  description = "ECRリポジトリ"
+  type = string
+}
 

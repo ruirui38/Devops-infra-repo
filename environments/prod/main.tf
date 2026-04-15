@@ -31,6 +31,10 @@ locals {
 
 }
 
+data "aws_ecr_repository" "api" {
+  name = "devops-prod-api"
+}
+
 module "base" {
   source = "../../modules/base"
 
@@ -40,8 +44,6 @@ module "base" {
 
   availability_zone = local.availability_zone
 
-  container_image_tag = local.container_image_tag
-
   db_user = local.db_user
 
   db_password = var.db_password
@@ -49,7 +51,7 @@ module "base" {
   db_name = local.db_name
 }
 
-# APIモジュール（ECS/Fargate + ALB + ACM + Route53）
+# APIモジュール
 module "api" {
   source = "../../modules/api"
 
@@ -63,14 +65,20 @@ module "api" {
 
   private_subnet_ids = module.base.private_subnet_ids
 
-  alb_security_group_id = module.base.alb_security_group_id
+  alb_security_group_id = module.base.api_security_group_id
 
-  ecr_repository_url = module.base.ecr_repository_url
+  api_security_group_id = module.base.api_security_group_id
 
   db_name = local.db_name
 
   db_user = local.db_user
 
   db_password = var.db_password
+
+  db_host = module.base.rds_endpoint
+
+  ecr_repository_url = data.aws_ecr_repository.api.repository_url
+
+  cloudwatch_log_group_name = module.base.cloudwatch_log_group_name
 
 }
