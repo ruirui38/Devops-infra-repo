@@ -18,22 +18,17 @@ output "alb_security_group_id" {
   value       = aws_security_group.alb.id
 }
 
-# output "api_security_group_id" {
-#   description = "API用セキュリティグループID"
-#   value       = aws_security_group.api.id
-# }
-
-# output "rds_endpoint" {
-#   description = "RDSエンドポイント"
-#   value       = aws_db_instance.rds.address
-# }
-
-output "ecr_repository_url" {
-  description = "ECRリポジトリURL"
-  value       = aws_ecr_repository.api.repository_url
+output "api_security_group_id" {
+  description = "API用セキュリティグループID"
+  value       = aws_security_group.api.id
 }
 
-# output "cloudwatch_log_group_name" {
-#   description = "CloudWatch Logsグループ名"
-#   value       = aws_cloudwatch_log_group.api.name
-# }
+output "rds_endpoint" {
+  description = "RDSエンドポイント"
+  value       = aws_rds_cluster.rds_cluster.endpoint
+}
+
+output "cloudwatch_log_group_name" {
+  description = "CloudWatch Logsグループ名"
+  value       = aws_cloudwatch_log_group.api.name
+}

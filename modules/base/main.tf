@@ -102,54 +102,151 @@ resource "aws_security_group" "alb" {
   }
 }
 
+#ECS用SG  (API)
+resource "aws_security_group" "api" {
+  name = "${var.project_name}-api-sg"
 
-#ECR
-resource "aws_ecr_repository" "api" {
-  name = "${var.project_name}-api"
+  description = "security group for api"
 
-  image_tag_mutability = "MUTABLE"
+  vpc_id = aws_vpc.vpc.id
 
-  force_delete = true
+  ingress {
+    from_port = 80
 
-  image_scanning_configuration {
-    scan_on_push = true
+    to_port = 80
+
+    protocol = "tcp"
+
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port = 0
+
+    to_port = 0
+
+    protocol = "-1"
+
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
-    Name = "${var.project_name}-api"
+    Name = "${var.project_name}-api-sg"
   }
 }
 
-#ECRライフサイクルポリシー (5世代管理)
-resource "aws_ecr_lifecycle_policy" "count_policy" {
-  repository = aws_ecr_repository.api.name
+ #Security Group
+resource "aws_security_group" "db" {
+  name   = "${var.project_name}-db-sg"
+  vpc_id = aws_vpc.vpc.id
 
-  policy = <<EOF
-{
-  "rules": [
-    {
-      "rulePriority": 1,
-      "description": "Keep last 5 images",
-      "selection": {
-        "tagStatus": "any",
-        "countType": "imageCountMoreThan",
-        "countNumber": 5
-      },
-      "action": {
-        "type": "expire"
-      }
-    }
-  ]
+  ingress {
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.api.id] 
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-db-sg"
+  }
 }
-EOF
+
+# Subnet Group
+resource "aws_db_subnet_group" "db" {
+  name       = "${var.project_name}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name = "${var.project_name}-db-subnet-group"
+  }
 }
 
-# # CloudWatch Logsグループ
-# resource "aws_cloudwatch_log_group" "api" {
-#   name              = "/ecs/${var.project_name}-api"
-#   retention_in_days = 7
+# Cluster Parameter Group
+resource "aws_rds_cluster_parameter_group" "db" {
+  name   = "${var.project_name}-cluster-pg"
+  family = "aurora-mysql8.0"
 
-#   tags = {
-#     Name = "${var.project_name}-api-logs"
-#   }
-# }
+  parameter {
+    name  = "time_zone"
+    value = "Asia/Tokyo"
+  }
+
+  tags = {
+    Name = "${var.project_name}-cluster-pg"
+  }
+}
+
+# DB Parameter Group
+resource "aws_db_parameter_group" "db" {
+  name   = "${var.project_name}-db-pg"
+  family = "aurora-mysql8.0"
+
+  tags = {
+    Name = "${var.project_name}-db-pg"
+  }
+}
+
+#RDS
+resource "aws_rds_cluster" "rds_cluster" {
+  cluster_identifier = "${var.project_name}-db-cluster"
+
+  engine = "aurora-mysql"
+
+  engine_version = "8.0.mysql_aurora.3.04.0"
+
+  database_name = var.db_name
+
+  master_username = var.db_user
+
+  master_password = var.db_password
+
+  db_subnet_group_name = aws_db_subnet_group.db.name
+
+  vpc_security_group_ids = [aws_security_group.db.id]
+
+  skip_final_snapshot = true
+
+  backup_retention_period = 5
+
+  preferred_backup_window = "05:00-07:00"
+
+  storage_encrypted = true
+
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.db.name
+
+  tags = {
+    Name = "${var.project_name}-db-cluster"
+  }
+}
+
+resource "aws_rds_cluster_instance" "db_instance" {
+  count                   = 2
+  identifier              = "${var.project_name}-aurora-instance-${count.index}"
+  cluster_identifier      = aws_rds_cluster.rds_cluster.id
+  instance_class          = "db.t3.medium"
+  engine                  = aws_rds_cluster.rds_cluster.engine
+  engine_version          = aws_rds_cluster.rds_cluster.engine_version
+  db_parameter_group_name = aws_db_parameter_group.db.name
+
+  tags = {
+    Name = "${var.project_name}-aurora-instance-${count.index}"
+  }
+}
+
+# CloudWatch Logsグループ
+resource "aws_cloudwatch_log_group" "api" {
+  name              = "/ecs/${var.project_name}-api"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${var.project_name}-api-logs"
+  }
+}

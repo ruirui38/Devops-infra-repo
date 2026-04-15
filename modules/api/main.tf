@@ -135,49 +135,49 @@ resource "aws_ecs_cluster" "cluster" {
   }
 }
 
-# resource "aws_ecs_task_definition" "api_tasldef" {
-#   family = "${var.project_name}-api"
+resource "aws_ecs_task_definition" "api_tasldef" {
+  family = "${var.project_name}-api"
 
-#   requires_compatibilities = ["FARGATE"]
+  requires_compatibilities = ["FARGATE"]
 
-#   network_mode = "awsvpc"
+  network_mode = "awsvpc"
 
-#   cpu    = "256"
-#   memory = "512"
+  cpu    = "256"
+  memory = "512"
 
-#   execution_role_arn = aws_iam_role.task_exec_role.arn
+  execution_role_arn = aws_iam_role.task_exec_role.arn
 
-#   container_definitions = jsonencode([
-#     {
-#       name      = "api"
-#       image     = "${aws_ecr_repository.api.repository_url}:${var.container_image_tag}"
-#       cpu       = 10
-#       memory    = 512
-#       essential = true
-#       portMappings = [
-#         {
-#           containerPort = 80
-#           hostPort      = 80
-#         }
-#       ],
-#       environment = [
-#         { name = "DB_HOST", value = var.db_host },
-#         { name = "DB_NAME", value = var.db_name },
-#         { name = "DB_USER", value = var.db_user },
-#         { name = "DB_PASSWORD", value = var.db_password },
-#       ]
-#       logConfiguration = {
-#         logDriver = "awslogs"
-#         options = {
-#           "awslogs-group"         = aws_cloudwatch_log_group.api.name
-#           "awslogs-region"        = "ap-northeast-1"
-#           "awslogs-stream-prefix" = "api"
-#         }
-#       }
-#     }
-#   ])
+  container_definitions = jsonencode([
+    {
+      name      = "api"
+      image     = "${var.ecr_repository_url}:${var.container_image_tag}"
+      cpu       = 10
+      memory    = 512
+      essential = true
+      portMappings = [
+        {
+          containerPort = 80
+          hostPort      = 80
+        }
+      ],
+      environment = [
+        { name = "DB_HOST", value = var.db_host },
+        { name = "DB_NAME", value = var.db_name },
+        { name = "DB_USER", value = var.db_user },
+        { name = "DB_PASSWORD", value = var.db_password },
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = var.cloudwatch_log_group_name
+          "awslogs-region"        = "ap-northeast-1"
+          "awslogs-stream-prefix" = "api"
+        }
+      }
+    }
+  ])
 
-#   tags = {
-#     Name = "${var.project_name}-taskdef"
-#   }
-# }
+  tags = {
+    Name = "${var.project_name}-taskdef"
+  }
+}
