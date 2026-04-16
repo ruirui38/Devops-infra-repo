@@ -65,7 +65,7 @@ module "api" {
 
   private_subnet_ids = module.base.private_subnet_ids
 
-  alb_security_group_id = module.base.api_security_group_id
+  alb_security_group_id = module.base.alb_security_group_id
 
   api_security_group_id = module.base.api_security_group_id
 
@@ -80,5 +80,7 @@ module "api" {
   ecr_repository_url = data.aws_ecr_repository.api.repository_url
 
   cloudwatch_log_group_name = module.base.cloudwatch_log_group_name
+
+  alb_logs = module.base.alb_logs
 
 }
