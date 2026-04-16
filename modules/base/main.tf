@@ -50,13 +50,40 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
+#リージョナルNAT
+resource "aws_nat_gateway" "nat" {
+  vpc_id            = aws_vpc.vpc.id
+  availability_mode = "regional"
+
+  tags = {
+    Name = "${var.project_name}-nat-gw"
+  }
+}
+
 #Route Table
-resource "aws_route_table" "publuc_rtb" {
+resource "aws_route_table" "public_rtb" {
   vpc_id = aws_vpc.vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
+  }
+
+  tags = {
+    Name  = "${var.project_name}-public-rtb"
+  }
+}
+
+resource "aws_route_table" "private_rtb" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    nat_gateway_id  = aws_nat_gateway.nat.id
+  }
+  
+  tags = {
+    Name  = "${var.project_name}-private-rtb"
   }
 }
 
@@ -66,7 +93,15 @@ resource "aws_route_table_association" "public" {
 
   subnet_id = aws_subnet.public[count.index].id
 
-  route_table_id = aws_route_table.publuc_rtb.id
+  route_table_id = aws_route_table.public_rtb.id
+}
+
+resource "aws_route_table_association" "private" {
+  count = length(var.availability_zone)
+
+  subnet_id = aws_subnet.private[count.index].id
+
+  route_table_id = aws_route_table.private_rtb.id
 }
 
 #ALB用SG
@@ -228,7 +263,7 @@ resource "aws_rds_cluster" "rds_cluster" {
 }
 
 resource "aws_rds_cluster_instance" "db_instance" {
-  count                   = 2
+  count                   = 0
   identifier              = "${var.project_name}-aurora-instance-${count.index}"
   cluster_identifier      = aws_rds_cluster.rds_cluster.id
   instance_class          = "db.t3.medium"
@@ -249,4 +284,32 @@ resource "aws_cloudwatch_log_group" "api" {
   tags = {
     Name = "${var.project_name}-api-logs"
   }
+}
+
+#S3 (ALBアクセスログ用)
+resource "aws_s3_bucket" "alb_logs" {
+  bucket = "${var.project_name}-alb-logs"
+
+  tags = {
+    Name = "${var.project_name}-alb-logs"
+  }
+}
+
+# バケットポリシー
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::582318560864:root"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+      }
+    ]
+  })
 }

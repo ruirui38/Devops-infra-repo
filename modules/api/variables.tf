@@ -69,3 +69,8 @@ variable "ecr_repository_url" {
   type = string
 }
 
+variable "alb_logs" {
+  description = "ALB用S3バケット"
+  type = string
+}
+

@@ -32,3 +32,8 @@ output "cloudwatch_log_group_name" {
   description = "CloudWatch Logsグループ名"
   value       = aws_cloudwatch_log_group.api.name
 }
+
+output "alb_logs" {
+  description = "ALB用S3バケット"
+  value = aws_s3_bucket.alb_logs.id
+}
