@@ -1,3 +1,6 @@
+# AWSアカウントIDを動的に取得
+data "aws_caller_identity" "current" {}
+
 #Target Group
 resource "aws_lb_target_group" "front_end_blue" {
   name        = "${var.project_name}-blue-tg"
@@ -76,26 +79,18 @@ resource "aws_alb_listener_rule" "rule1" {
   priority = 1
 
   action {
-    type = "forward"
-
-    forward {
-      target_group {
-        arn    = aws_lb_target_group.front_end_blue.arn
-        weight = 100
-      }
-      target_group {
-        arn    = aws_lb_target_group.front_end_green.arn
-        weight = 0
-      }
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.front_end_blue.arn
   }
 
   condition {
     host_header {
-      values = [
-        aws_alb.alb.dns_name
-      ]
+      values = [aws_alb.alb.dns_name]
     }
+  }
+
+  lifecycle {
+    ignore_changes = [action]
   }
 }
 
@@ -123,26 +118,18 @@ resource "aws_alb_listener_rule" "test_rule" {
   priority = 1
 
   action {
-    type = "forward"
-
-    forward {
-      target_group {
-        arn    = aws_lb_target_group.front_end_blue.arn
-        weight = 100
-      }
-      target_group {
-        arn    = aws_lb_target_group.front_end_green.arn
-        weight = 0
-      }
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.front_end_blue.arn
   }
 
   condition {
     host_header {
-      values = [
-        aws_alb.alb.dns_name
-      ]
+      values = [aws_alb.alb.dns_name]
     }
+  }
+
+  lifecycle {
+    ignore_changes = [action]
   }
 }
 
@@ -162,6 +149,29 @@ resource "aws_iam_role" "task_exec_role" {
       }
     ]
   })
+}
+
+resource "aws_iam_policy" "ssm_read_policy" {
+  name_prefix = "${var.project_name}-ssm-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssm:GetParameters",
+        "kms:Decrypt"
+      ]
+      Resource = [
+        "arn:aws:ssm:ap-northeast-1:${data.aws_caller_identity.current.account_id}:parameter/devops/prod/db/*"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_read" {
+  role       = aws_iam_role.task_exec_role.name
+  policy_arn = aws_iam_policy.ssm_read_policy.arn
 }
 
 # AWS管理ポリシーのみアタッチ
@@ -243,7 +253,7 @@ resource "aws_ecs_cluster" "cluster" {
   }
 }
 
-resource "aws_ecs_task_definition" "api_tasldef" {
+resource "aws_ecs_task_definition" "api_taskdef" {
   family = "${var.project_name}-api"
 
   requires_compatibilities = ["FARGATE"]
@@ -254,7 +264,6 @@ resource "aws_ecs_task_definition" "api_tasldef" {
     operating_system_family = "LINUX"
     cpu_architecture        = "ARM64"
   }
-
 
   cpu    = "256"
   memory = "512"
@@ -280,7 +289,12 @@ resource "aws_ecs_task_definition" "api_tasldef" {
         { name = "DB_HOST", value = var.db_host },
         { name = "DB_NAME", value = var.db_name },
         { name = "DB_USER", value = var.db_user },
-        { name = "DB_PASSWORD", value = var.db_password },
+      ],
+      secrets = [
+        {
+          name      = "DB_PASSWORD"
+          valueFrom = "arn:aws:ssm:ap-northeast-1:${data.aws_caller_identity.current.account_id}:parameter/devops/prod/db/password"
+        }
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -306,11 +320,13 @@ resource "aws_ecs_service" "service" {
 
   cluster = aws_ecs_cluster.cluster.id
 
-  task_definition = aws_ecs_task_definition.api_tasldef.arn
+  task_definition = aws_ecs_task_definition.api_taskdef.arn
 
   desired_count = 1
 
   enable_execute_command = true
+
+
 
   deployment_configuration {
     strategy             = "BLUE_GREEN"
@@ -339,5 +355,33 @@ resource "aws_ecs_service" "service" {
       role_arn                   = aws_iam_role.ecs_infrastructure_role_for_load_balancers.arn
       test_listener_rule         = aws_alb_listener_rule.test_rule.arn
     }
+  }
+}
+
+
+#ECSオートスケール(CPU 70%)
+resource "aws_appautoscaling_target" "ecs_target" {
+  min_capacity = 1
+  max_capacity = 2
+
+  resource_id        = "service/${aws_ecs_cluster.cluster.name}/${aws_ecs_service.service.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "ecs_cpu_policy" {
+  name               = "${var.project_name}-cpu-scaling-policy"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value = 70.0
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
   }
 }

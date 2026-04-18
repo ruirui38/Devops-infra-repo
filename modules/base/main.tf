@@ -355,4 +355,4 @@ resource "aws_vpc_endpoint" "s3" {
     tags = {
     Name = "${var.project_name}-vpce-s3"
   }
-}
+} 
