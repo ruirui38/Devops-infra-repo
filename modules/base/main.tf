@@ -26,13 +26,28 @@ resource "aws_subnet" "public" {
   }
 }
 
-#Private subnet
-resource "aws_subnet" "private" {
+#Protected subnet
+resource "aws_subnet" "protected" {
   count = length(var.availability_zone)
 
   vpc_id = aws_vpc.vpc.id
 
   cidr_block = cidrsubnet(var.vpc_cidr, 3, count.index + length(var.availability_zone))
+
+  availability_zone = var.availability_zone[count.index]
+
+  tags = {
+    Name = "${var.project_name}-protected-subnet-${substr(var.availability_zone[count.index], -2, 2)}"
+  }
+}
+
+# Private subnet
+resource "aws_subnet" "private" {
+  count = length(var.availability_zone)
+
+  vpc_id = aws_vpc.vpc.id
+
+  cidr_block = cidrsubnet(var.vpc_cidr, 3, count.index + var.max_az_count * 2)
 
   availability_zone = var.availability_zone[count.index]
 
@@ -74,13 +89,21 @@ resource "aws_route_table" "public_rtb" {
   }
 }
 
-resource "aws_route_table" "private_rtb" {
+resource "aws_route_table" "protected_rtb" {
   vpc_id = aws_vpc.vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
     nat_gateway_id  = aws_nat_gateway.nat.id
   }
+  
+  tags = {
+    Name  = "${var.project_name}-protected-rtb"
+  }
+}
+
+resource "aws_route_table" "private_rtb" {
+  vpc_id = aws_vpc.vpc.id
   
   tags = {
     Name  = "${var.project_name}-private-rtb"
@@ -94,6 +117,14 @@ resource "aws_route_table_association" "public" {
   subnet_id = aws_subnet.public[count.index].id
 
   route_table_id = aws_route_table.public_rtb.id
+}
+
+resource "aws_route_table_association" "protected" {
+  count = length(var.availability_zone)
+
+  subnet_id = aws_subnet.protected[count.index].id
+
+  route_table_id = aws_route_table.protected_rtb.id
 }
 
 resource "aws_route_table_association" "private" {
@@ -146,9 +177,9 @@ resource "aws_security_group" "api" {
   vpc_id = aws_vpc.vpc.id
 
   ingress {
-    from_port = 80
+    from_port = 8000
 
-    to_port = 80
+    to_port = 8000
 
     protocol = "tcp"
 
@@ -263,7 +294,7 @@ resource "aws_rds_cluster" "rds_cluster" {
 }
 
 resource "aws_rds_cluster_instance" "db_instance" {
-  count                   = 0
+  count                   = 1
   identifier              = "${var.project_name}-aurora-instance-${count.index}"
   cluster_identifier      = aws_rds_cluster.rds_cluster.id
   instance_class          = "db.t3.medium"
@@ -312,4 +343,16 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       }
     ]
   })
+}
+
+#S3ゲートウェイエンドポイント
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = aws_vpc.vpc.id
+  service_name = "com.amazonaws.ap-northeast-1.s3"
+
+  route_table_ids = [aws_route_table.protected_rtb.id]
+
+    tags = {
+    Name = "${var.project_name}-vpce-s3"
+  }
 }

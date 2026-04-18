@@ -18,6 +18,12 @@ variable "availability_zone" {
   type = list(string)
 }
 
+variable "max_az_count" {
+  description = "最大AZ数"
+
+  type = number
+}
+
 variable "db_name" {
   description = "DB名"
 

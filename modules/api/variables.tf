@@ -44,6 +44,11 @@ variable "public_subnet_ids" {
   type        = list(string)
 }
 
+variable "protected_subnet_ids" {
+  description = "プロテクトサブネットIDリスト"
+  type        = list(string)
+}
+
 variable "private_subnet_ids" {
   description = "プライベートサブネットIDリスト"
   type        = list(string)

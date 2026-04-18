@@ -29,11 +29,6 @@ resource "aws_lb_target_group" "front_end_green" {
   }
 }
 
-#S3 (ALBログ用)
-resource "aws_s3_bucket" "log_bucket" {
-  bucket = "${var.project_name}-alb-logs-bucket"
-}
-
 #ALB
 resource "aws_alb" "alb" {
   name = "${var.project_name}-alb"
@@ -175,6 +170,46 @@ resource "aws_iam_role_policy_attachment" "task_exec_managed_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# タスクロール
+resource "aws_iam_role" "task_role" {
+  name = "${var.project_name}-ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+# ECS Exec用ポリシードキュメント
+resource "aws_iam_policy" "ecs_exec_policy" {
+  name_prefix = "${var.project_name}-ecs-exec-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+# タスクロールにアタッチ
+resource "aws_iam_role_policy_attachment" "ecs-exec_policy" {
+  role       = aws_iam_role.task_role.name
+  policy_arn = aws_iam_policy.ecs_exec_policy.arn
+}
+
+
 #ECS Blue/Green用ロール
 resource "aws_iam_role" "ecs_infrastructure_role_for_load_balancers" {
   name = "${var.project_name}-ecs-infrastructure-role"
@@ -215,10 +250,18 @@ resource "aws_ecs_task_definition" "api_tasldef" {
 
   network_mode = "awsvpc"
 
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "ARM64"
+  }
+
+
   cpu    = "256"
   memory = "512"
 
   execution_role_arn = aws_iam_role.task_exec_role.arn
+
+  task_role_arn = aws_iam_role.task_role.arn
 
   container_definitions = jsonencode([
     {
@@ -267,6 +310,8 @@ resource "aws_ecs_service" "service" {
 
   desired_count = 1
 
+  enable_execute_command = true
+
   deployment_configuration {
     strategy             = "BLUE_GREEN"
     bake_time_in_minutes = "1"
@@ -279,7 +324,7 @@ resource "aws_ecs_service" "service" {
   wait_for_steady_state = true
 
   network_configuration {
-    subnets          = var.private_subnet_ids
+    subnets          = var.protected_subnet_ids
     security_groups  = [var.api_security_group_id]
     assign_public_ip = false
   }

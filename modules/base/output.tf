@@ -8,6 +8,11 @@ output "public_subnet_ids" {
   value       = aws_subnet.public[*].id
 }
 
+output "protected_subnet_ids" {
+  description = "プロテクトサブネットIDのリスト"
+  value       = aws_subnet.protected[*].id
+}
+
 output "private_subnet_ids" {
   description = "プライベートサブネットIDのリスト"
   value       = aws_subnet.private[*].id
