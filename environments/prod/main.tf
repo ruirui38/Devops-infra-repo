@@ -25,8 +25,6 @@ locals {
 
   max_az_count = 3
 
-  container_image_tag = "latest"
-
   db_name = "tododb"
 
   db_user = "admin"
