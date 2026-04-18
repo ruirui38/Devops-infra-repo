@@ -23,6 +23,8 @@ locals {
 
   availability_zone = ["ap-northeast-1a", "ap-northeast-1c"]
 
+  max_az_count = 3
+
   container_image_tag = "latest"
 
   db_name = "tododb"
@@ -44,6 +46,8 @@ module "base" {
 
   availability_zone = local.availability_zone
 
+  max_az_count = local.max_az_count
+
   db_user = local.db_user
 
   db_password = var.db_password
@@ -64,6 +68,8 @@ module "api" {
   public_subnet_ids = module.base.public_subnet_ids
 
   private_subnet_ids = module.base.private_subnet_ids
+
+  protected_subnet_ids = module.base.protected_subnet_ids
 
   alb_security_group_id = module.base.alb_security_group_id
 
