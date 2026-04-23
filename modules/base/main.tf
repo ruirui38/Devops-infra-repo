@@ -365,4 +365,128 @@ resource "aws_vpc_endpoint" "s3" {
     tags = {
     Name = "${var.project_name}-vpce-s3"
   }
-} 
+}
+
+# GitHub Actions OIDC Provider
+resource "aws_iam_openid_connect_provider" "github_actions" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = ["sts.amazonaws.com"]
+
+  # GitHub OIDC thumbprint
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "1b511abead59c6ce207077c0bf0e0043b1382612",
+  ]
+
+  tags = {
+    Name = "${var.project_name}-github-actions-oidc-provider"
+  }
+}
+
+# 信頼ポリシー: 指定リポジトリ・ブランチのみ AssumeRole を許可
+data "aws_iam_policy_document" "github_actions_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      # 例: ["repo:myorg/myrepo:ref:refs/heads/main"]
+      values = var.github_actions_allowed_subjects
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions" {
+  name               = "${var.project_name}-github-actions-role"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+
+  tags = {
+    Name = "${var.project_name}-github-actions-role"
+  }
+}
+
+# ECR イメージプッシュ権限
+data "aws_iam_policy_document" "github_actions_ecr" {
+  statement {
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage",
+    ]
+    resources = var.github_actions_ecr_repository_arns
+  }
+}
+
+resource "aws_iam_policy" "github_actions_ecr" {
+  name   = "${var.project_name}-github-actions-ecr-policy"
+  policy = data.aws_iam_policy_document.github_actions_ecr.json
+
+  tags = {
+    Name = "${var.project_name}-github-actions-ecr-policy"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_ecr" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.github_actions_ecr.arn
+}
+
+# ECS デプロイ権限（タスク定義更新・サービス更新）
+data "aws_iam_policy_document" "github_actions_ecs" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "ecs:RegisterTaskDefinition",
+      "ecs:DescribeTaskDefinition",
+      "ecs:UpdateService",
+      "ecs:DescribeServices",
+    ]
+    resources = ["*"]
+  }
+
+  # ECS がタスク実行ロール・タスクロールを引き受けるための PassRole
+  statement {
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
+    resources = var.github_actions_ecs_passrole_arns
+  }
+}
+
+resource "aws_iam_policy" "github_actions_ecs" {
+  name   = "${var.project_name}-github-actions-ecs-policy"
+  policy = data.aws_iam_policy_document.github_actions_ecs.json
+
+  tags = {
+    Name = "${var.project_name}-github-actions-ecs-policy"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_ecs" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.github_actions_ecs.arn
+}
