@@ -51,6 +51,19 @@ module "base" {
   db_password = var.db_password
 
   db_name = local.db_name
+
+  github_actions_allowed_subjects = [
+    "repo:ruirui38/Devops-infra-repo:ref:refs/heads/main",
+  ]
+
+  github_actions_ecr_repository_arns = [
+    data.aws_ecr_repository.api.arn,
+  ]
+
+  github_actions_ecs_passrole_arns = [
+    module.api.ecs_task_execution_role_arn,
+    module.api.ecs_task_role_arn,
+  ]
 }
 
 # APIモジュール

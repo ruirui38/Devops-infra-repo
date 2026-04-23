@@ -31,6 +31,7 @@ output "api_security_group_id" {
 output "rds_endpoint" {
   description = "RDSエンドポイント"
   value       = aws_rds_cluster.rds_cluster.endpoint
+  depends_on  = [aws_rds_cluster_instance.db_instance]
 }
 
 output "cloudwatch_log_group_name" {
@@ -41,4 +42,9 @@ output "cloudwatch_log_group_name" {
 output "alb_logs" {
   description = "ALB用S3バケット"
   value = aws_s3_bucket.alb_logs.id
+}
+
+output "github_actions_role_arn" {
+  description = "GitHub Actions が AssumeRole する IAM ロール ARN"
+  value       = aws_iam_role.github_actions.arn
 }
