@@ -53,7 +53,7 @@ module "base" {
   db_name = local.db_name
 
   github_actions_allowed_subjects = [
-    "repo:ruirui38/Devops-infra-repo:ref:refs/heads/main",
+    "repo:ruirui38/Devops-repo:ref:refs/heads/main",
   ]
 
   github_actions_ecr_repository_arns = [
